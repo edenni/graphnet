@@ -46,7 +46,7 @@ declare -a prediction_names=(
 )
 
 for i in "${!model_configs[@]}"; do
-    echo "training iteration ${i} on ${model_configs[$i]} with output variables ${prediction_names[i][@]}"
+    echo "training iteration ${i} on ${model_configs[$i]} with output variables ${prediction_names[$i]}"
     python ${bash_directory}/01_train_model.py \
         --dataset-config ${dataset_config} \
         --model-config ${model_configs[$i]} \
@@ -55,7 +55,7 @@ for i in "${!model_configs[@]}"; do
         --early-stopping-patience ${early_stopping_patience} \
         --batch-size ${batch_size} \
         --num-workers ${num_workers} \
-        --prediction-names ${prediction_names[i][@]} \
+        --prediction-names ${prediction_names[i]} \
         --suffix ${suffixs[i]}
     wait
 done

@@ -8,6 +8,7 @@ from torch.nn import ModuleList
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch_geometric.data import Data
+from torchmetrics import Metric
 
 from graphnet.models.coarsening import Coarsening
 from graphnet.utilities.config import save_model_config
@@ -62,6 +63,8 @@ class StandardModel(Model):
         self._scheduler_kwargs = scheduler_kwargs or dict()
         self._scheduler_config = scheduler_config or dict()
 
+        self.mae = MeanAngularError()
+
     def configure_optimizers(self) -> Dict[str, Any]:
         """Configure the model's optimizer(s)."""
         optimizer = self._optimizer_class(
@@ -112,14 +115,20 @@ class StandardModel(Model):
             batch_size=self._get_batch_size(train_batch),
             prog_bar=True,
             on_epoch=True,
-            on_step=False,
+            on_step=True,
             sync_dist=True,
         )
         return loss
 
     def validation_step(self, val_batch: Data, batch_idx: int) -> Tensor:
         """Perform validation step."""
-        loss = self.shared_step(val_batch, batch_idx)
+        # loss = self.shared_step(val_batch, batch_idx)
+        preds = self(val_batch)
+        loss = self.compute_loss(preds, val_batch)
+        target = val_batch[self._task[0]._target_labels[0]]
+
+        self.mae(preds[0], target)
+
         self.log(
             "val_loss",
             loss,
@@ -130,6 +139,12 @@ class StandardModel(Model):
             sync_dist=True,
         )
         return loss
+    
+    def validation_epoch_end(self, outputs) -> None:
+        self.log(
+            "val_mae",
+            self.mae.compute(),
+        )
 
     def compute_loss(
         self, preds: Tensor, data: Data, verbose: bool = False
@@ -175,3 +190,28 @@ class StandardModel(Model):
             gpus=gpus,
             distribution_strategy=distribution_strategy,
         )
+
+
+class MeanAngularError(Metric):
+    def __init__(self):
+        super().__init__()
+        self.add_state("err", default=torch.tensor(0.), dist_reduce_fx="sum")
+        self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        if preds.size(1) > target.size(1):
+            preds = preds[:, : target.size(1)]
+
+        assert preds.shape == target.shape, f"preds in size {preds.shape} doesn't match target in size {target.shape}"
+
+        err = torch.arccos(
+              target[:, 0] * preds[:, 0]
+            + target[:, 1] * preds[:, 1]
+            + target[:, 2] * preds[:, 2]
+        )
+
+        self.err += err.sum()
+        self.total += preds.size(0)
+
+    def compute(self):
+        return self.err.float() / self.total

@@ -40,8 +40,7 @@ def main(
     """Run example."""
     # Initialise Weights & Biases (W&B) run
     wandb_logger = WandbLogger(
-        project="example-script",
-        entity="graphnet-team",
+        project="graphnet-test",
         save_dir=WANDB_DIR,
         log_model=True,
     )
