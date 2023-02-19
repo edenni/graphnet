@@ -110,7 +110,7 @@ class StandardModel(Model):
         """Perform training step."""
         loss = self.shared_step(train_batch, batch_idx)
         self.log(
-            "train_loss",
+            "train/loss",
             loss,
             batch_size=self._get_batch_size(train_batch),
             prog_bar=True,
@@ -125,12 +125,12 @@ class StandardModel(Model):
         # loss = self.shared_step(val_batch, batch_idx)
         preds = self(val_batch)
         loss = self.compute_loss(preds, val_batch)
-        target = val_batch[self._task[0]._target_labels[0]]
+        target = val_batch[self._tasks[0]._target_labels[0]]
 
         self.mae(preds[0], target)
 
         self.log(
-            "val_loss",
+            "val/loss",
             loss,
             batch_size=self._get_batch_size(val_batch),
             prog_bar=True,
@@ -142,7 +142,7 @@ class StandardModel(Model):
     
     def validation_epoch_end(self, outputs) -> None:
         self.log(
-            "val_mae",
+            "val/mae",
             self.mae.compute(),
         )
 
