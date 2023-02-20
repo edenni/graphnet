@@ -113,7 +113,7 @@ class StandardModel(Model):
             "train/loss",
             loss,
             batch_size=self._get_batch_size(train_batch),
-            prog_bar=True,
+            prog_bar=False,
             on_epoch=True,
             on_step=True,
             sync_dist=True,
@@ -128,22 +128,25 @@ class StandardModel(Model):
         target = val_batch[self._tasks[0]._target_labels[0]]
 
         self.mae(preds[0], target)
+        # print("mae: ", batch_idx, self.mae.err, self.mae.total)
 
         self.log(
             "val/loss",
             loss,
             batch_size=self._get_batch_size(val_batch),
-            prog_bar=True,
+            prog_bar=False,
             on_epoch=True,
             on_step=False,
             sync_dist=True,
         )
         return loss
     
-    def validation_epoch_end(self, outputs) -> None:
+    def on_validation_epoch_end(self) -> None:
         self.log(
             "val/mae",
             self.mae.compute(),
+            on_epoch=True,
+            sync_dist=True,
         )
 
     def compute_loss(
@@ -195,17 +198,19 @@ class StandardModel(Model):
 class MeanAngularError(Metric):
     def __init__(self):
         super().__init__()
-        self.add_state("err", default=torch.tensor(0.), dist_reduce_fx="sum")
-        self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
+        self.add_state("err", default=torch.tensor(0.0, dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("total", default=torch.tensor(0, dtype=torch.long), dist_reduce_fx="sum")
 
     def update(self, preds: torch.Tensor, target: torch.Tensor):
         if preds.size(1) > target.size(1):
             preds = preds[:, : target.size(1)]
 
-        assert preds.shape == target.shape, f"preds in size {preds.shape} doesn't match target in size {target.shape}"
+        assert (
+            preds.shape == target.shape
+        ), f"preds in size {preds.shape} doesn't match target in size {target.shape}"
 
         err = torch.arccos(
-              target[:, 0] * preds[:, 0]
+            target[:, 0] * preds[:, 0]
             + target[:, 1] * preds[:, 1]
             + target[:, 2] * preds[:, 2]
         )
@@ -214,4 +219,4 @@ class MeanAngularError(Metric):
         self.total += preds.size(0)
 
     def compute(self):
-        return self.err.float() / self.total
+        return self.err.item() / self.total.item()
