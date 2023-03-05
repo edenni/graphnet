@@ -14,7 +14,7 @@ def has_icecube_package() -> bool:
     try:
         import icecube  # pyright: reportMissingImports=false
 
-        return True
+        return False
     except ImportError:
         warn_once(
             logger,

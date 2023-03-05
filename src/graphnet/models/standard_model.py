@@ -140,7 +140,7 @@ class StandardModel(Model):
             sync_dist=True,
         )
         return loss
-    
+
     def on_validation_epoch_end(self) -> None:
         self.log(
             "val/mae",
@@ -198,8 +198,16 @@ class StandardModel(Model):
 class MeanAngularError(Metric):
     def __init__(self):
         super().__init__()
-        self.add_state("err", default=torch.tensor(0.0, dtype=torch.float32), dist_reduce_fx="sum")
-        self.add_state("total", default=torch.tensor(0, dtype=torch.long), dist_reduce_fx="sum")
+        self.add_state(
+            "err",
+            default=torch.tensor(0.0, dtype=torch.float32),
+            dist_reduce_fx="sum",
+        )
+        self.add_state(
+            "total",
+            default=torch.tensor(0, dtype=torch.long),
+            dist_reduce_fx="sum",
+        )
 
     def update(self, preds: torch.Tensor, target: torch.Tensor):
         if preds.size(1) > target.size(1):
@@ -209,11 +217,19 @@ class MeanAngularError(Metric):
             preds.shape == target.shape
         ), f"preds in size {preds.shape} doesn't match target in size {target.shape}"
 
+        rt = torch.linalg.vector_norm(target, dim=-1, keepdim=True)
+        rp = torch.linalg.vector_norm(preds, dim=-1, keepdim=True)
+
+        target = target / rt
+        preds = preds / rp
+
         err = torch.arccos(
             target[:, 0] * preds[:, 0]
             + target[:, 1] * preds[:, 1]
             + target[:, 2] * preds[:, 2]
         )
+
+        err = torch.clip(err, -1, 1)
 
         self.err += err.sum()
         self.total += preds.size(0)
