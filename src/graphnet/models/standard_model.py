@@ -229,8 +229,9 @@ class MeanAngularError(Metric):
             + target[:, 2] * preds[:, 2]
         )
 
-        err = torch.clip(err, -1, 1)
-
+        err = torch.clip(err, 0, 2*torch.pi)
+        err = torch.nan_to_num(err, nan=torch.pi)
+        
         self.err += err.sum()
         self.total += preds.size(0)
 
